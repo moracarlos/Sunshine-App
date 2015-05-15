@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.text.format.Time;
 import android.util.Log;
@@ -16,6 +17,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.ShareActionProvider;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -39,6 +41,7 @@ import java.util.List;
 public class ForecastFragment extends Fragment {
 
     private ArrayAdapter<String> mAdapter;
+    private ShareActionProvider mShareActionProvider;
     private List<String> weekForecast;
     public ForecastFragment() {
     }
@@ -52,21 +55,12 @@ public class ForecastFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_main,container, false);
-        String[] forecastArray = {
-                "Monday",
-                "Tuesday",
-                "Wednesday",
-                "Thursday",
-                "Friday",
-                "Saturday",
-                "Sunday"
-        };
-        weekForecast = new ArrayList<String>(
-                Arrays.asList(forecastArray)
-        );
+        String[] forecastArray = {};
+        weekForecast = new ArrayList<String>(Arrays.asList(forecastArray));
         mAdapter = new ArrayAdapter<String>(getActivity(), R.layout.list_tem_forecast, R.id.list_item_forecast_textview, weekForecast);
         ListView listView = (ListView) rootView.findViewById(R.id.listview_forecast);
         listView.setAdapter(mAdapter);
+        new FetchWeatherTask().execute(PreferenceManager.getDefaultSharedPreferences(getActivity()).getString(getString(R.string.pref_location_key), getString(R.string.pref_location_default)));
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick (AdapterView < ? > adapterView, View view,int i, long l){
@@ -90,22 +84,34 @@ public class ForecastFragment extends Fragment {
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
-
         if (id == R.id.action_refresh) {
-            new FetchWeatherTask().execute(94043);
+            new FetchWeatherTask().execute(PreferenceManager.getDefaultSharedPreferences(getActivity()).getString(getString(R.string.pref_location_key), getString(R.string.pref_location_default)));
             return true;
         }
+        if (id == R.id.action_map){
+            Uri gmmIntentUri = Uri.parse("geo:0,0?q="+PreferenceManager.getDefaultSharedPreferences(getActivity()).getString("location", "94043"));
+            Intent viewMap = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+            viewMap.setPackage("com.google.android.apps.maps");
+            if (viewMap.resolveActivity(getActivity().getPackageManager()) != null) {
+                startActivity(viewMap);
+            }
+            return true;
+
+        }
+
+
 
         return super.onOptionsItemSelected(item);
     }
 
-    public class FetchWeatherTask extends AsyncTask<Integer, Void, String[]>
+
+    public class FetchWeatherTask extends AsyncTask<String, Void, String[]>
     {
         private final String LOG_TAG = FetchWeatherTask.class.getSimpleName();
         private final String numDays = "7";
 
         @Override
-        protected String[] doInBackground(Integer... postCodes) {
+        protected String[] doInBackground(String... postCodes) {
             // These two need to be declared outside the try/catch
             // so that they can be closed in the finally block.
             HttpURLConnection urlConnection = null;
@@ -125,7 +131,7 @@ public class ForecastFragment extends Fragment {
                 mUri.appendPath("2.5");
                 mUri.appendPath("forecast");
                 mUri.appendPath("daily");
-                mUri.appendQueryParameter("q", Integer.toString(postCodes[0]));
+                mUri.appendQueryParameter("q", (postCodes[0]));
                 mUri.appendQueryParameter("mode", "json");
                 mUri.appendQueryParameter("units", "metric");
                 mUri.appendQueryParameter("cnt", numDays);
@@ -272,6 +278,12 @@ public class ForecastFragment extends Fragment {
                 double high = temperatureObject.getDouble(OWM_MAX);
                 double low = temperatureObject.getDouble(OWM_MIN);
 
+                //Here is the transformation
+                String temperatureUnits = PreferenceManager.getDefaultSharedPreferences(getActivity()).getString(getString(R.string.pref_temperature_key), getString(R.string.pref_temperature_default));
+                if (temperatureUnits.equals("farenheit")){
+                    high = high * 1.8 + 32.0;
+                    low = low * 1.8 + 32.0;
+                }
                 highAndLow = formatHighLows(high, low);
                 resultStrs[i] = day + " - " + description + " - " + highAndLow;
             }
